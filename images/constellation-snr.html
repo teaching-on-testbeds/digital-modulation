@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital modulation: constellations vs SNR</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --fg: #e8eaf0;
+    --muted: #9aa1b0;
+    --accent: #4f9cf9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--fg);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+  p.lede { color: var(--muted); margin: 0 0 20px; font-size: 14px; max-width: 780px; }
+  .controls {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 20px; padding: 14px 16px;
+    background: var(--panel); border-radius: 10px;
+  }
+  .controls label { font-size: 14px; }
+  input[type=range] { width: 320px; accent-color: var(--accent); }
+  .snr-value {
+    font-variant-numeric: tabular-nums; font-weight: 600; min-width: 84px;
+    color: var(--accent);
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px; max-width: 1280px;
+  }
+  .card {
+    background: var(--panel); border-radius: 10px; padding: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .meta { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .card canvas { width: 100%; aspect-ratio: 1; display: block; background: #0b0d11; border-radius: 8px; }
+  .card .stats { font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .footer { margin-top: 20px; color: var(--muted); font-size: 13px; max-width: 780px; }
+  code { background: #232833; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Digital modulation: constellations vs SNR</h1>
+
+  <div class="controls">
+    <label for="noise">Noise level</label>
+    <input type="range" id="noise" min="1" max="120" step="1" value="20">
+    <span class="snr-value" id="noise-value">20% (σ=0.20)</span>
+    <span class="snr-value" id="snr-value" style="color:#7dd88a">SNR 14.0 dB</span>
+    <label style="margin-left:12px"><input type="checkbox" id="pause"> freeze</label>
+    <label><input type="checkbox" id="real-time" checked> live update</label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <p class="footer">
+    <span style="color:#4f9cf9">●</span> received symbols &nbsp; <span style="color:#7dd88a">●</span>
+    symbol errors (nearest constellation point is not the one that was sent) &nbsp;
+    <span style="color:#ff5f5f">■</span> ideal constellation points.
+  </p>
+
+<script>
+"use strict";
+
+const XMIN = -1.8, XMAX = 1.8, N = 1400;
+const POINT_COUNT = { bpsk: 2, qpsk: 4, qam16: 16 };
+const RULES = {
+  bpsk: { title: "BPSK", sub: "2 levels · 1 bit/symbol", bits: 1 },
+  qpsk: { title: "QPSK", sub: "4 levels · 2 bits/symbol", bits: 2 },
+  qam16:{ title: "16-QAM", sub: "16 levels · 4 bits/symbol", bits: 4 },
+};
+
+function constellationPoints(kind) {
+  const g = [-3, -1, 1, 3];
+  let pts;
+  if (kind === "bpsk") pts = [[1,0],[-1,0]];
+  else if (kind === "qpsk") pts = [[1,1],[1,-1],[-1,1],[-1,-1]];
+  else {
+    pts = [];
+    for (const a of g) for (const b of g) pts.push([a, b]);
+  }
+  const avg = pts.reduce((s, p) => s + p[0]*p[0] + p[1]*p[1], 0) / pts.length;
+  const k = 1 / Math.sqrt(avg);
+  return pts.map(([x, y]) => [x * k, y * k]);
+}
+
+function gauss() { // ~N(0,1) Box-Muller
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function buildCard(kind) {
+  const grid = document.getElementById("grid");
+  const rule = RULES[kind];
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML =
+    `<h2>${rule.title}</h2>` +
+    `<p class="meta">${rule.sub} · ${POINT_COUNT[kind]} constellation points</p>` +
+    `<canvas></canvas>` +
+    `<div class="stats">EVM <b>—</b> · est. SNR <b>—</b></div>`;
+  grid.appendChild(card);
+  const canvas = card.querySelector("canvas");
+  const ctx = canvas.getContext("2d");
+  return { kind, card, canvas, ctx, pts: constellationPoints(kind), stats: card.querySelector(".stats") };
+}
+
+const cards = [buildCard("bpsk"), buildCard("qpsk"), buildCard("qam16")];
+const noise = document.getElementById("noise");
+const noiseValue = document.getElementById("noise-value");
+const snrValue = document.getElementById("snr-value");
+const pause = document.getElementById("pause");
+const realTime = document.getElementById("real-time");
+
+let buffer = {}; // kind -> array of {x,y}
+
+function resize(card) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = card.canvas.getBoundingClientRect();
+  card.canvas.width = Math.round(rect.width * dpr);
+  card.canvas.height = Math.round(rect.height * dpr);
+  card.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function draw(card) {
+  const w = card.canvas.getBoundingClientRect().width;
+  const h = card.canvas.getBoundingClientRect().height;
+  const ctx = card.ctx;
+  ctx.clearRect(0, 0, w, h);
+  // axes
+  ctx.strokeStyle = "#2a3140";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w/2, 0); ctx.lineTo(w/2, h);
+  ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+  ctx.stroke();
+  // ideal points
+  const scale = Math.min(w, h) / (XMAX - XMIN);
+  ctx.fillStyle = "#ff5f5f";
+  ctx.font = "12px monospace";
+  for (const [px, py] of card.pts) {
+    const x = w/2 + px * scale, y = h/2 - py * scale;
+    ctx.fillRect(x - 2, y - 2, 4, 4);
+  }
+  // noisy symbols - red = mistaken (nearest center != its own)
+  ctx.globalAlpha = 0.28;
+  let errors = 0, total = 0;
+  for (const p of buffer[card.kind] || []) {
+    const x = w/2 + p.x * scale, y = h/2 - p.y * scale;
+    let best = Infinity, bestIdx = 0;
+    for (let j = 0; j < card.pts.length; j++) {
+      const d = (p.x - card.pts[j][0]) ** 2 + (p.y - card.pts[j][1]) ** 2;
+      if (d < best) { best = d; bestIdx = j; }
+    }
+    const wrong = bestIdx !== p.idx;
+    if (wrong) { errors++; ctx.fillStyle = "#7dd88a"; } else { ctx.fillStyle = "#4f9cf9"; }
+    ctx.beginPath(); ctx.arc(x, y, 1.6, 0, 2 * Math.PI); ctx.fill();
+    total++;
+  }
+  ctx.globalAlpha = 1;
+
+  // EVM / SNR estimate
+  if (buffer[card.kind] && buffer[card.kind].length) {
+    const pts = buffer[card.kind];
+    let err2 = 0;
+    for (const p of pts) {
+      let best = Infinity;
+      for (const [qx, qy] of card.pts) {
+        const d = (p.x - qx) ** 2 + (p.y - qy) ** 2;
+        if (d < best) best = d;
+      }
+      err2 += best;
+    }
+    const evm = Math.sqrt(err2 / pts.length);
+    const snrEst = evm > 0 ? 10 * Math.log10(1 / (evm ** 2)) : 99;
+    const ber = total ? (errors / total * 100).toFixed(1) : "0";
+    card.stats.innerHTML =
+      `EVM <b>${(evm * 100).toFixed(1)}%</b> · est. SNR <b>${snrEst.toFixed(1)} dB</b>` +
+      ` · symbol errors <b>${ber}%</b>`;
+  }
+}
+
+function step() {
+  const noisePct = parseFloat(noise.value);
+  const sigma = noisePct / 100; // std dev per component, relative to unit signal amplitude
+  const snrDb = 20 * Math.log10(1 / sigma);
+  noiseValue.textContent = noisePct.toFixed(0) + "% (σ=" + sigma.toFixed(2) + ")";
+  snrValue.textContent = "SNR " + snrDb.toFixed(1) + " dB";
+
+  for (const card of cards) {
+    if (!buffer[card.kind]) buffer[card.kind] = [];
+    if (realTime.checked) {
+      // draw one fresh batch each frame -> animated clouds
+      const fresh = [];
+      for (let i = 0; i < N; i++) {
+        const idx = (Math.random() * card.pts.length) | 0;
+        const [px, py] = card.pts[idx];
+        fresh.push({ x: px + sigma * gauss(), y: py + sigma * gauss(), idx });
+      }
+      buffer[card.kind] = fresh;
+    }
+    resize(card);
+    draw(card);
+  }
+  if (!pause.checked) requestAnimationFrame(step);
+}
+
+noise.addEventListener("input", step);
+pause.addEventListener("change", () => { if (!pause.checked) requestAnimationFrame(step); });
+realTime.addEventListener("change", step);
+</script>
+</body>
+</html>

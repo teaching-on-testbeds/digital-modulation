@@ -1,0 +1,17 @@
+{
+  "testbed": "sb5",
+  "tx_node": "node1-2",
+  "rx_node": "node1-1",
+  "device": {
+    "args": "type=b200",
+    "subdev": "A:A",
+    "tx_antenna": "TX/RX",
+    "rx_antenna": "RX2",
+    "tx_gain_max": 89,
+    "rx_gain_max": 76,
+    "tx_gain_default": 89,
+    "rx_gain_default": 40,
+    "frequency": 2400000000
+  },
+  "notes": "USRP B210 connected by USB. The B210 supports the full 4 MS/s rate used by this lab. Use type=b200 and subdevice A:A in UHD arguments."
+}

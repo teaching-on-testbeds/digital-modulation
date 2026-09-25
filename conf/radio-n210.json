@@ -1,0 +1,17 @@
+{
+  "testbed": "sb7",
+  "tx_node": "node1-2",
+  "rx_node": "node1-1",
+  "device": {
+    "args": "addr=192.168.10.2",
+    "subdev": "A:0",
+    "tx_antenna": "TX/RX",
+    "rx_antenna": "RX2",
+    "tx_gain_max": 31.5,
+    "rx_gain_max": 31.5,
+    "tx_gain_default": 20,
+    "rx_gain_default": 30,
+    "frequency": 2400000000
+  },
+  "notes": "USRP N210r4 + SBX daughterboard (400-4400 MHz). Assign 192.168.10.1/24 to enp4s0 on each node after imaging (ip addr add 192.168.10.1/24 dev enp4s0). RX rate capped at 4 MS/s (GigE). SB5/B210 equivalent: args type=b200, subdev A:A, gain up to 89 dB."
+}
