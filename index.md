@@ -45,13 +45,13 @@ Because the bit error rate (BER) for a given modulation scheme is a known functi
 When we run the experiment at high SNR, we see a constellation with the correct number of clouds: BPSK has two points, QPSK has four, and 16-QAM has sixteen. 
 
 
-![Live BPSK scope at 20 dB transmit gain](images/dm-live-bpsk.png)
+![Live BPSK scope](images/dm-live-bpsk.png)
 
 
-![Live QPSK scope at 20 dB transmit gain](images/dm-live-qpsk.png)
+![Live QPSK scope](images/dm-live-qpsk.png)
 
 
-![Live 16-QAM scope at 20 dB transmit gain](images/dm-live-16qam.png)
+![Live 16-QAM scope](images/dm-live-16qam.png)
 
 As we reduce the signal level, the clouds become wider, the measured EVM increases, and the measured error rate rises.
 
@@ -107,10 +107,10 @@ This process can take 5-10 minutes. Don't interrupt it in middle - you'll just h
 If it's been successful, then once the process finishes running completely you should see output similar to:
 
 ```
- INFO exp:  -----------------------------
- INFO exp:  Imaging Process Done
- INFO exp:  2 nodes successfully imaged - Topology saved in '/tmp/omf-pxe_slice-XXXX-topo-success.rb'
- INFO exp:  -----------------------------
+ -----------------------------
+ Imaging Process Done
+ 2 nodes successfully imaged - Topology saved in '/tmp/omf-load-XXXX-topo-success.rb'
+ -----------------------------
 ```
 
 Sometimes, transient errors can cause the process to fail - if you haven't successfully imaged 2 nodes, wait a few minutes and try again.
