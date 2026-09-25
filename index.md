@@ -181,7 +181,7 @@ If you are using sb5 (B210), run
 
 ```
 # runs on node1-2
-time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 89 \
+time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 89 --amplitude 0.1 \
   --args type=b200 --subdev A:A
 ```
 
@@ -193,7 +193,7 @@ time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 \
   --tx-gain 20 --args addr=192.168.10.2 --subdev A:0
 ```
 
-The `-p` argument sets the number of signal levels (2 = BPSK, 4 = QPSK, 16 = 16-QAM), `--tx-gain` sets the transmit gain in dB, and `--amplitude` sets the digital waveform amplitude. On sb7, the SBX transmit gain range is 0-31.5 dB, so use values like 20, 15, 10, 5, 0. On sb5, the B210 transmit gain goes up to 89 dB, so you can use values like 89, 83, 77, 71, 65.
+The `-p` argument sets the number of signal levels (2 = BPSK, 4 = QPSK, 16 = 16-QAM), `--tx-gain` sets the transmit gain in dB, and `--amplitude` sets the digital waveform amplitude. On sb7, the SBX transmit gain range is 0-31.5 dB, so use values like 20, 15, 10, 5, 0. On sb5, the B210 transmit gain goes up to 89 dB; the specific values to use are given below.
 
 #### Choose a receiver workflow
 
@@ -203,6 +203,17 @@ The scope opens the USRP on the receiver node. UHD allows only one receiver proc
 
 We will visualize the live constellation using a "scope"! Start the scope on the receiver node:
 
+If you are using sb5 (B210), run
+
+```
+# runs on node1-1
+cd /root/digital-modulation/src
+/root/dm-venv/bin/bokeh serve dm_scope.py --port 5006 --allow-websocket-origin=localhost:15006 \
+  --args --freq 2400e6
+```
+
+If you are using sb7 (N210), run
+
 ```
 # runs on node1-1
 cd /root/digital-modulation/src
@@ -211,7 +222,17 @@ cd /root/digital-modulation/src
   --args addr=192.168.10.2 --subdev A:0 --gain 30
 ```
 
-Keep that terminal running. From your laptop, open a second terminal and create an SSH tunnel to the receiver node:
+Keep that terminal running. From your laptop, open a second terminal and create an SSH tunnel to the receiver node.
+
+If you are using sb5, run
+
+```
+# runs on your workstation
+ssh -N -J YOUR_USERNAME@sb5.cosmos-lab.org \
+  -L 15006:127.0.0.1:5006 root@node1-1
+```
+
+If you are using sb7, run
 
 ```
 # runs on your workstation
@@ -225,15 +246,66 @@ Open `http://localhost:15006/dm_scope` in your browser. Select the same modulati
 
 Repeat for each modulation: Run through each of BPSK (`-p 2`), QPSK (`-p 4`), and 16-QAM (`-p 16`). (Stop and re-start the transmitter between runs.)
 
-Leave the scope running. Stop and restart the transmitter with a lower gain, wait for the scope to update, and take a screenshot. If the clouds remain tight at the minimum gain, restart the transmitter with `--amplitude 0.05`, then `--amplitude 0.01`.
+Leave the scope running. Each time you change the modulation, select the same one in the scope.
 
-Repeat the sequence for decreasing transmit gains and, when needed, decreasing amplitudes until the clouds become difficult to distinguish.
+<!-- sb5 OPTION A: vary the TX gain. Keep either this block or OPTION B, and delete the other. -->
+
+If you are using sb5, keep `--amplitude 0.1`, and for each modulation, run the transmitter with each of these transmit gains, in this order:
+
+```
+--tx-gain 89
+--tx-gain 83
+--tx-gain 77
+--tx-gain 71
+--tx-gain 65
+--tx-gain 59
+--tx-gain 53
+```
+
+Each time, stop and restart the transmitter, wait a few seconds for the scope to update, and take a screenshot. For example, the third BPSK run is:
+
+```
+# runs on node1-2
+time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 77 --amplitude 0.1 \
+  --args type=b200 --subdev A:A
+```
+
+On sb5, this sequence takes the SNR from about 20 dB (tight clouds, no bit errors) down to about -6 dB, where the clouds have merged together and many bits are wrong.
+
+<!-- end of sb5 OPTION A -->
+
+<!-- sb5 OPTION B: vary the amplitude. Keep either this block or OPTION A, and delete the other. -->
+
+If you are using sb5, keep `--tx-gain 89`, and for each modulation, run the transmitter with each of these amplitudes, in this order:
+
+```
+--amplitude 0.1
+--amplitude 0.05
+--amplitude 0.02
+--amplitude 0.01
+--amplitude 0.005
+--amplitude 0.002
+```
+
+Each time, stop and restart the transmitter, wait a few seconds for the scope to update, and take a screenshot. For example, the third BPSK run is:
+
+```
+# runs on node1-2
+time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 89 --amplitude 0.02 \
+  --args type=b200 --subdev A:A
+```
+
+On sb5, this sequence takes the SNR from about 20 dB (tight clouds, no bit errors) down to about -4 dB, where the clouds have merged together and many bits are wrong.
+
+<!-- end of sb5 OPTION B -->
+
+If you are using sb7, stop and restart the transmitter with a lower gain, wait for the scope to update, and take a screenshot. If the clouds remain tight at the minimum gain, restart the transmitter with `--amplitude 0.05`, then `--amplitude 0.01`. Repeat the sequence for decreasing transmit gains and, when needed, decreasing amplitudes until the clouds become difficult to distinguish.
 
 Organize your screenshots in a table of constellation diagrams:
 
 * one column each for BPSK, QPSK, and 16-QAM
-* one row for each transmit gain or amplitude you tried, starting from high signal level until the lowest row shows extremely high error
+* one row for each signal level you tried, starting from high signal level until the lowest row shows extremely high error
 
-**Lab report**: Include the screenshot table. For each row, record the TX gain or amplitude and the EVM, SNR, bit errors, and CFO shown by the scope.
+**Lab report**: Include the screenshot table. For each row, record the TX gain and amplitude, and the EVM, SNR, bit errors, and CFO shown by the scope.
 
 Explain why the clouds expand as the signal level falls. Compare the robustness of BPSK, QPSK, and 16-QAM. Explain why reducing `--amplitude` changes the visible SNR even though the scope normalizes the constellation radius.

@@ -107,6 +107,8 @@ def measure(samples, levels, amplitude=0.2):
             if abs(gain) < 1e-10:
                 continue
             equalized = observed / gain
+            # Remove the receiver's common DC/IQ bias before measuring EVM.
+            equalized -= np.mean(equalized - target)
             error = np.mean(np.abs(equalized - target) ** 2)
             if candidate is None or error < candidate[0]:
                 candidate = (error, equalized, target, indices[TRAINING_SYMBOLS:FRAME_SYMBOLS - SPAN_SYMBOLS])
