@@ -53,7 +53,7 @@ When we run the experiment at high SNR, we see a constellation with the correct 
 
 ![Live 16-QAM scope at 20 dB transmit gain](images/dm-live-16qam.png)
 
-As we reduce the signal level, the clouds become wider, the measured EVM increases, and the measured error rate rises. On sb7, reducing TX gain alone may not reach that point; reducing `--amplitude` provides a wider low-SNR range.
+As we reduce the signal level, the clouds become wider, the measured EVM increases, and the measured error rate rises.
 
 <!-- 
 The live browser scope was verified on sb7 (N210 with SBX daughterboards) at 2.4 GHz and 20 dB transmit gain. The ideal constellation points are marked with red crosses, and the received symbols form clouds around them. Representative measurements were:
@@ -172,6 +172,9 @@ ip addr add 192.168.10.1/24 dev enp4s0
 
 (If the address is already set, the command will report that it already exists, which is fine.)
 
+> [!NOTE]
+> On sb7, Ubuntu's automatic updates may run in the background some time after the nodes boot, and restart the network service. That removes this address, and the transmitter or scope then fails with `No devices found`. If that happens, run the `ip addr add` command above again on that node, and restart the transmitter or scope.
+
 
 #### Start the transmitter
 
@@ -189,11 +192,11 @@ If you are using sb7 (N210), run
 
 ```
 # runs on node1-2
-time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 \
-  --tx-gain 20 --args addr=192.168.10.2 --subdev A:0
+time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 0 --amplitude 0.1 \
+  --args addr=192.168.10.2 --subdev A:0
 ```
 
-The `-p` argument sets the number of signal levels (2 = BPSK, 4 = QPSK, 16 = 16-QAM), `--tx-gain` sets the transmit gain in dB, and `--amplitude` sets the digital waveform amplitude. On sb7, the SBX transmit gain range is 0-31.5 dB, so use values like 20, 15, 10, 5, 0. On sb5, the B210 transmit gain goes up to 89 dB; the specific values to use are given below.
+The `-p` argument sets the number of signal levels (2 = BPSK, 4 = QPSK, 16 = 16-QAM), `--tx-gain` sets the transmit gain in dB, and `--amplitude` sets the digital waveform amplitude. In this experiment, you will keep the transmit gain fixed (89 dB on sb5, 0 dB on sb7) and change only `--amplitude`, using the sequence of values given below.
 
 #### Choose a receiver workflow
 
@@ -219,7 +222,7 @@ If you are using sb7 (N210), run
 cd /root/digital-modulation/src
 /root/dm-venv/bin/bokeh serve dm_scope.py --port 5006 --allow-websocket-origin=localhost:15006 \
   --args --freq 2400e6 \
-  --args addr=192.168.10.2 --subdev A:0 --gain 30
+  --args addr=192.168.10.2 --subdev A:0 --gain 0
 ```
 
 Keep that terminal running. From your laptop, open a second terminal and create an SSH tunnel to the receiver node.
@@ -242,39 +245,11 @@ ssh -N -J YOUR_USERNAME@sb7.cosmos-lab.org \
 
 Open `http://localhost:15006/dm_scope` in your browser. Select the same modulation as the transmitter (initially, BPSK) so that the scope knows what the "ideal" constellation should be. The scope synchronizes to the repeated known frame and displays the constellation, EVM, SNR, bit errors, and CFO.
 
-#### Reduce the transmit gain and repeat
+#### Vary the modulation, vary the signal level, and repeat
 
 Repeat for each modulation: Run through each of BPSK (`-p 2`), QPSK (`-p 4`), and 16-QAM (`-p 16`). (Stop and re-start the transmitter between runs.)
 
 Leave the scope running. Each time you change the modulation, select the same one in the scope.
-
-<!-- sb5 OPTION A: vary the TX gain. Keep either this block or OPTION B, and delete the other. -->
-
-If you are using sb5, keep `--amplitude 0.1`, and for each modulation, run the transmitter with each of these transmit gains, in this order:
-
-```
---tx-gain 89
---tx-gain 83
---tx-gain 77
---tx-gain 71
---tx-gain 65
---tx-gain 59
---tx-gain 53
-```
-
-Each time, stop and restart the transmitter, wait a few seconds for the scope to update, and take a screenshot. For example, the third BPSK run is:
-
-```
-# runs on node1-2
-time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 77 --amplitude 0.1 \
-  --args type=b200 --subdev A:A
-```
-
-On sb5, this sequence takes the SNR from about 20 dB (tight clouds, no bit errors) down to about -6 dB, where the clouds have merged together and many bits are wrong.
-
-<!-- end of sb5 OPTION A -->
-
-<!-- sb5 OPTION B: vary the amplitude. Keep either this block or OPTION A, and delete the other. -->
 
 If you are using sb5, keep `--tx-gain 89`, and for each modulation, run the transmitter with each of these amplitudes, in this order:
 
@@ -297,9 +272,24 @@ time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 89 -
 
 On sb5, this sequence takes the SNR from about 20 dB (tight clouds, no bit errors) down to about -4 dB, where the clouds have merged together and many bits are wrong.
 
-<!-- end of sb5 OPTION B -->
+If you are using sb7, keep `--tx-gain 0` (and the scope's RX gain at 0), and for each modulation, run the transmitter with each of these amplitudes, in this order:
 
-If you are using sb7, stop and restart the transmitter with a lower gain, wait for the scope to update, and take a screenshot. If the clouds remain tight at the minimum gain, restart the transmitter with `--amplitude 0.05`, then `--amplitude 0.01`. Repeat the sequence for decreasing transmit gains and, when needed, decreasing amplitudes until the clouds become difficult to distinguish.
+```
+--amplitude 0.1
+--amplitude 0.05
+--amplitude 0.03
+--amplitude 0.02
+```
+
+Each time, stop and restart the transmitter, wait a few seconds for the scope to update, and take a screenshot. For example, the third BPSK run is:
+
+```
+# runs on node1-2
+time python3 /root/digital-modulation/src/dm_tx.py -f 2400e6 -p 2 --tx-gain 0 --amplitude 0.03 \
+  --args addr=192.168.10.2 --subdev A:0
+```
+
+On sb7, the two radios are so strongly coupled that even with both gains at 0, the signal is very strong, so this sequence covers a smaller range: it takes the SNR from about 20 dB down to about 7 dB. That is enough to see 16-QAM (and, at the end, QPSK) make bit errors, but BPSK stays error-free throughout. (Don't go below `--amplitude 0.02`: at lower amplitudes, the receiver loses track of the signal altogether, rather than seeing it get noisier. See the Notes section below.)
 
 Organize your screenshots in a table of constellation diagrams:
 
@@ -308,4 +298,18 @@ Organize your screenshots in a table of constellation diagrams:
 
 **Lab report**: Include the screenshot table. For each row, record the TX gain and amplitude, and the EVM, SNR, bit errors, and CFO shown by the scope.
 
-Explain why the clouds expand as the signal level falls. Compare the robustness of BPSK, QPSK, and 16-QAM. Explain why reducing `--amplitude` changes the visible SNR even though the scope normalizes the constellation radius.
+Explain why the clouds expand as the signal level falls. Compare the robustness of BPSK, QPSK, and 16-QAM. Explain why reducing `--amplitude` changes the visible SNR.
+
+## Notes
+
+### Other impairments
+
+In this experiment, we lower the SNR, and the only effect we want to see is noise: round clouds, centered on the ideal points, that grow as the SNR falls. Real radios have other impairments too, and each one distorts the constellation in its own way:
+
+- **Carrier frequency offset (CFO):** the transmitter and receiver oscillators are at slightly different frequencies, so the received constellation keeps rotating. Left uncorrected, the clusters smear into rings. The scope measures and removes the CFO, but the CFO removal may not be perfect.
+- **Phase noise:** the oscillator phase jitters a little, so each cluster is smeared along an arc around the center, more for points farther from the center.
+- **DC offset and carrier leakage:** a constant is added to every received sample (from the receiver itself, or from the transmitter's carrier leaking through), so the whole constellation is shifted off center. The scope removes this offset before it measures the EVM, but some may persist.
+- **IQ imbalance:** the I and Q branches have slightly different gains, or are not exactly 90 degrees apart, so the constellation is stretched or squashed in one direction, or skewed (a square 16-QAM grid becomes a rectangle or a parallelogram).
+- **Nonlinearity:** if the signal is too strong for the transmitter's amplifier (or the receiver), the largest samples are compressed. The outer points of 16-QAM get pulled inward, and clusters get stretched. This is why the amplitude sequences above start at 0.1, not higher.
+
+When the signal is very weak, these impairments can matter more than the noise. For example, the carrier leakage does not get smaller when you lower `--amplitude`, so at very low amplitudes it can be stronger than the signal itself; then, the receiver may shift the constellation, lose track of the signal, or show points scattered everywhere, rather than a larger cloud.

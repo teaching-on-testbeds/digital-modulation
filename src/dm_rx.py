@@ -40,6 +40,13 @@ class Receiver:
         self.radio.set_center_freq(freq, 0)
         self.radio.set_gain(gain, 0)
         self.radio.set_antenna(antenna, 0)
+        # Let UHD remove the receiver's own DC offset and IQ imbalance.
+        for name in ("set_auto_dc_offset", "set_auto_iq_balance"):
+            try:
+                getattr(self.radio, name)(True, 0)
+                print("%s: on" % name, flush=True)
+            except Exception as exc:
+                print("%s: not supported (%s)" % (name, exc), flush=True)
         self.tap = Tap(self)
         self.tb.connect(self.radio, self.tap)
         self.tb.start()
